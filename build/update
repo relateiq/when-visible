@@ -1,0 +1,102 @@
+#!/bin/bash
+
+####################################################################
+# System Update
+#
+# This script does an in-place update of core system files including
+# the `iqb` task runner and core system tasks
+#
+# By default, this script updates only the handful of core system
+# files.  To update any other files you can run
+#
+#     iqb update <filenames>
+#
+# For example, to pull the updated .gitignore and .eslintrc:
+#
+#     iqb update .eslintrc .gitignore
+#
+####################################################################
+
+if [ ! -z "$(git status -s)" ]; then
+    echo
+    echo '!! You have uncommitted changes.  Please stash or commit your changes before updating'
+    echo
+    exit 1
+fi
+
+git remote | grep bedrock > /dev/null
+if [ $? -gt 0 ]; then
+    git remote add bedrock git://github.com/relateiq/bedrock.git -t iqproj-webmodule
+else
+    echo "switching bedrock upstream from iqproj-webmodule to master"
+    git remote remove bedrock
+    git remote add bedrock git://github.com/relateiq/bedrock.git -t master
+fi
+
+git fetch bedrock
+git reset
+
+if [ -z "$1" ]; then
+    system_files=(
+        bin/iqb
+        bin/headless
+        build/deploy
+        build/start-server
+        build/update
+    )
+
+    # update the core system files
+    git checkout bedrock/iqproj-webmodule -- "${system_files[@]}"
+    git add -- "${system_files[@]}"
+else
+    # update one specific file (or set of files)
+    git checkout bedrock/iqproj-webmodule -- "$@"
+    git add -- "$@"
+fi
+
+# notify that these directories are deprecated
+# but don't actually delete them... just in case
+[ -d 'docker' ] && echo 'the "docker/" directory can be deleted';
+[ -d 'docker-dev' ] && echo 'the "docker-dev/" directory can be deleted';
+
+# update iqb npm packages
+npm_packages=(
+    aliasify@1.x
+    browserify@13.x
+    chokidar-cli@1.x
+    connect-livereload@0.x
+    exorcist@0.x
+    express@4.x
+    http-proxy@1.x
+    karma@0.x
+    karma-browserify@5.x
+    karma-chrome-launcher@1.x
+    karma-script-launcher@1.x
+    karma-tap@1.x
+    karma-teamcity-reporter@1.x
+    llexec@1.x
+    node-sass@3.x
+    riq-partialify@3.x
+    riq-tap-teamcity@1.x
+    shallow-diff@0.x
+    tap-min@1.x
+    tape@4.x
+    tiny-lr@0.x
+    typescript@1.x
+    typings@1.x
+    uiq@0.x
+    watchify@3.x
+    web-core-router@0.x
+    yargs@4.x
+)
+
+echo 'updating iqb system packages...'
+npm install --save-dev ${npm_packages[@]}
+git add package.json
+
+if [ ! -z "$(git status -s)" ]; then
+    git commit -m "update bedrock"
+    echo '---- Done -----'
+else
+    echo 'Already up to date'
+fi

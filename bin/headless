@@ -1,0 +1,38 @@
+#!/bin/zsh -x
+
+exec 1> ./headless.log
+exec 2> ./headless.error
+
+# make sure docker is available
+docker info
+if [ $? -gt 0 ]; then
+    echo "Error connecting to docker daemon"
+    exit 1;
+fi
+
+# container-id when running in a container
+karma_host=$HOSTNAME
+link_cfg=""
+
+if hash ipconfig 2> /dev/null; then
+    # local (os x)
+    karma_host=$(ipconfig getifaddr en0 || ipconfig getifaddr en1)
+else
+    # teamcity (linux)
+    link_cfg="--link=$karma_host:karmahost"
+fi
+
+karma_url="${1:-http://localhost:9876}"
+karma_url_from_container=$(echo "$karma_url" | sed "s,127.0.0.1,$karma_host,g" | sed "s,localhost,$karma_host,g")
+
+# remove any leftover containers (just in case)
+docker kill browser 2> /dev/null
+docker rm browser 2> /dev/null
+
+echo "Starting headless browser..."
+exec docker run \
+    $link_cfg \
+    --rm \
+    -e KARMA_URL="$karma_url_from_container" \
+    --name browser \
+    relateiq/headlessbrowser:latest
