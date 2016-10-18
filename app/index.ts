@@ -1,4 +1,4 @@
-///<reference path="../typings/browser.d.ts" />
+///<reference path="../typings/index.d.ts" />
 declare var require: NodeRequire;
 
 // This that LucidWeb normally provides
@@ -21,7 +21,6 @@ require('uiq');
  * here too.  and really you shouldn't be adding much (if any) logic here, so
  * ultimately it doesn't matter.
  */
-var appLogic = require('../.src');
 
 // Set up the shell app w/angular, uiq, and a router
 var router = require('web-core-router');
@@ -44,11 +43,71 @@ routerOptions.RouterCnst.STATES = {
   }
 };
 
+var when = require('../.src');
+
 // Bootstrap the shell-app module and configure the router
-module.exports = angular.module('shell-app', ['RouterCore', 'uiq', appLogic.name])
+module.exports = angular.module('shell-app', ['RouterCore', 'uiq', 'SampleModule'])
   .config(router.defaultRuleConfig(routerOptions.RouterCnst))
   .config(router.stateConfig(routerOptions))
   .run(router.run(routerOptions));
 
+  angular.module('SampleModule', [])
+    .directive('sampleModule', function($http) {
+        return {
+            restrict: 'E',
+            template: require('./sampleModule.html'),
+            controllerAs: '$ctrl',
+            controller: function($element) {
+                var $ctrl = this;
+                $ctrl.checkBasicCallbacks = function (dontMakeVisible) {
+                  var invisiDiv = document.createElement('div');
+                  invisiDiv.style.display = 'none';
+                  invisiDiv.textContent = 'invisiDiv';
+
+                  when.inDom(invisiDiv, function () {
+                      console.log('in dom');
+                  });
+                  $element.append(invisiDiv);
+                  var unbind1 = when.visible(invisiDiv, function () {
+                      console.log('visible!');
+                  });
+
+                  // make sure we can have two listeners on the same element
+                  let dumbArray = [];
+                  for(var i = 0; i < 10000; i++){
+                    dumbArray.push('alongish string ' + i);
+                  }
+                  var unbind2 = when.visible(invisiDiv, function () {
+                      console.log('visible 22222!');
+                      dumbArray[1] = 'something else';
+                  });
+                  setTimeout(function () {
+                      $element.append(invisiDiv);
+                       setTimeout(function () {
+                            if(!dontMakeVisible){
+                              invisiDiv.style.display = 'block';
+                            }
+                            setTimeout(function () {
+                                invisiDiv.parentNode.removeChild(invisiDiv);
+                                unbind1();
+                                unbind2();
+                            }, 500)
+                        }, 500)
+                  }, 500);
+                };
+
+                $ctrl.checkForLeaks = function () {
+                    $ctrl.intervalId = setInterval(function () {
+                        $ctrl.checkBasicCallbacks(true);
+                    }, 500);
+                };
+
+                $ctrl.cancelInterval = function () {
+                  clearInterval($ctrl.intervalId);
+                }
+            }
+          };
+        });
+
 window['q$'] = window['jQuery'];
-document.title = appLogic.name;
+document.title = 'When Visible Test Harness';
