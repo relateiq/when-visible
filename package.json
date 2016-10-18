@@ -1,6 +1,6 @@
 {
   "name": "when-visible",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "a template for basic ts packages",
   "main": ".src/index.js",
   "homepage": "https://github.com/relateiq/when-visible",
