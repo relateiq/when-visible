@@ -20,39 +20,13 @@ class WhenListener{
 }
 
 class InDomListener extends WhenListener{
-    highestParentObserver : MutationObserver;
-    highestParent : Node;
 
     constructor(elem, cb){
         super(elem, cb);
         let self = this;
-        this.highestParentObserver = new MutationObserver(function(mutations: MutationRecord[]) {
-            mutations.some(function (mutation : MutationRecord) {
-                if(mutation.removedNodes.length){
-                    self.updateInDomListenerParent();
-                    return true; // if we updated at all we don't need to do it again
-                }
-            });
-        });
-        self.updateInDomListenerParent();
         elem['__ElemInDomListenerId'] = this.id;
     }
 
-    private updateInDomListenerParent() {
-        let highestParent = getHighestParent(this.elem);
-        if(highestParent !== this.highestParent){
-            if(this.highestParent){
-                this.highestParent['__InDomListenerId'] = null;
-            }
-            this.highestParent = highestParent;
-            this.highestParent['__InDomListenerId'] = this.id;
-            this.highestParentObserver.disconnect();
-            this.highestParentObserver.observe(highestParent, {
-                childList : true,
-                subtree : true
-            });
-        }
-    }
 }
 
 function makeInDomListener(elem, cb) {
@@ -84,18 +58,15 @@ function destroyInDomListener(listener) {
     if(!listener){
         return;
     }
-    listener.highestParentObserver.disconnect();
     delete listenerMap[listener.id];
-    if(listener.highestParent){
-        listener.highestParent['__InDomListenerId'] = null;
-    }
     listener.elem['__ElemInDomListenerId'] = null;
 }
 
 function destroyVisibilityListener(listener) {
-    if(listener){
-        delete visibilityListeners[listener.id];
+    if(!listener){
+        return;
     }
+    delete visibilityListeners[listener.id];
     listener.elem['__VisibilityListenerId'] = null;
 }
 
@@ -111,7 +82,7 @@ function getHighestParent(elem) {
 }
 
 function isInDom(elem) {
-    return getHighestParent(elem) === document.body;
+    return getHighestParent(elem) === document;
 }
 
 function isVisible(element) {
@@ -119,17 +90,22 @@ function isVisible(element) {
 }
 
 const componentObserver = new MutationObserver(function whenListenerMutationHandler(mutations: MutationRecord[]) {
-    mutations.forEach(function inDomListenerHandlePossibleAdd(mutation) {
-        if(mutation.addedNodes.length){
-            Array.prototype.slice.call(mutation.addedNodes).forEach(function inDomListenerHandleAddedNode(addedNode) {
-                if(addedNode.__InDomListenerId){
-                    var listener = listenerMap[addedNode.__InDomListenerId];
-                    listener.callCallbacks();
-                    destroyInDomListener(listener);
-                }
+    let gotNonTextAddition = mutations.some(function inDomListenerHandlePossibleAdd(mutation) {
+           return mutation.addedNodes.length &&
+            Array.prototype.slice.call(mutation.addedNodes)
+            .some(function inDomListenerHandleAddedNode(addedNode) {
+                return addedNode.nodeType !== 3;
             });
-        }
     });
+    if(gotNonTextAddition){
+        Object.keys(listenerMap).forEach(function checkVisibiltyForWhenListenerId(id) {
+            let listener = listenerMap[id];
+            if(isInDom(listener.elem)){
+                listener.callCallbacks();
+                destroyInDomListener(listener);
+            }
+        });
+    }
     // for any mutation we should check waiting visibility listeners
     Object.keys(visibilityListeners).forEach(function checkVisibiltyForWhenListenerId(id) {
         let listener = visibilityListeners[id];
