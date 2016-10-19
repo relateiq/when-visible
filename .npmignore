@@ -1,0 +1,12 @@
+.idea
+.sass-cache
+npm-debug.log
+tsd-debug.log
+headless.error
+headless.log
+node_modules
+
+src/
+app/
+docker/public
+docker/start-server
