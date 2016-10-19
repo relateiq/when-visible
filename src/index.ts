@@ -2,10 +2,13 @@
 let listenerIdCount = 0;
 let listenerMap : { [key: number]: InDomListener } = {};
 let visibilityListeners : {[key: number]: WhenListener} = {};
+let animationFrameId;
+let gotAnyNonTextMutation;
 class WhenListener{
     id: number;
     elem : Node;
     callbacks : Function[] = [];
+    everChecked : boolean = false;
     constructor(elem, cb){
         this.id = ++listenerIdCount;
         this.elem = elem;
@@ -66,7 +69,6 @@ function destroyVisibilityListener(listener) {
     if(!listener){
         return;
     }
-    console.log('deleting visibility listener ' + listener.id);
     delete visibilityListeners[listener.id];
     listener.elem['__VisibilityListenerId'] = null;
 }
@@ -87,19 +89,35 @@ function isInDom(elem) {
 }
 
 function isVisible(element) {
-    return element.offsetWidth > 0 && element.offsetHeight > 0;
+    return element.offsetWidth > 0 || element.offsetHeight > 0 || element.getClientRects().length > 0;
 }
 
 const componentObserver = new MutationObserver(function whenListenerMutationHandler(mutations: MutationRecord[]) {
-    let gotNonTextAddition = mutations.some(function inDomListenerHandlePossibleAdd(mutation) {
-           return mutation.addedNodes.length &&
-            Array.prototype.slice.call(mutation.addedNodes)
-            .some(function inDomListenerHandleAddedNode(addedNode) {
-                return addedNode.nodeType !== 3;
-            });
+    let gotNonTextAddition = false;
+    let gotAnyNonText  = false;
+     mutations.some(function inDomListenerHandlePossibleAdd(mutation) {
+           if(mutation.addedNodes.length && !gotNonTextAddition) {
+                gotNonTextAddition = Array.prototype.slice.call(mutation.addedNodes)
+                    .some(function inDomListenerHandleAddedNode(addedNode) {
+                        return addedNode.nodeType !== 3;
+                    });
+                gotAnyNonText = gotAnyNonText || gotNonTextAddition;
+           }
+           if(mutation.removedNodes.length && !gotAnyNonText){
+               gotAnyNonText = Array.prototype.slice.call(mutation.removedNodes)
+                    .some(function inDomListenerHandleAddedNode(removedNode) {
+                        return removedNode.nodeType !== 3;
+                    });
+           }
+           if(mutation.type === 'attributes'){
+               gotAnyNonText = true;
+           }
+           if(gotAnyNonText && gotNonTextAddition){
+               return true;
+           }
     });
     if(gotNonTextAddition){
-        Object.keys(listenerMap).forEach(function checkVisibiltyForWhenListenerId(id) {
+        Object.keys(listenerMap).forEach(function checkForWhenInDomListenerId(id) {
             let listener = listenerMap[id];
             // have to check if listener is defined because one listener's callback
             // can actually unbind other listeners resulting in a null map ref
@@ -109,19 +127,29 @@ const componentObserver = new MutationObserver(function whenListenerMutationHand
             }
         });
     }
-    // for any mutation we should check waiting visibility listeners
-    var keys = Object.keys(visibilityListeners);
-    keys.forEach(function checkVisibiltyForWhenListenerId(id) {
-        keys[1] = keys[1];
+    gotAnyNonTextMutation = gotAnyNonText;
+});
+
+setInterval(checkVisibility, 32);
+
+function checkVisibility() {
+    animationFrameId = null;
+           // for any mutation we should check waiting visibility listeners
+     var keys = Object.keys(visibilityListeners);
+        keys.forEach(function checkVisibiltyForWhenListenerId(id) {
         let listener = visibilityListeners[id];
-        // have to check if listener is defined because one listener's callback
-        // can actually unbind other listeners resulting in a null map ref
-        if(listener && isVisible(listener.elem)){
-            listener.callCallbacks();
-            destroyVisibilityListener(listener);
+        if(gotAnyNonTextMutation || !listener.everChecked){
+            // have to check if listener is defined because one listener's callback
+            // can actually unbind other listeners resulting in a null map ref
+            listener.everChecked = true;
+            if(listener && isVisible(listener.elem)){
+                listener.callCallbacks();
+                destroyVisibilityListener(listener);
+            }
         }
     });
-});
+    gotAnyNonTextMutation = false;
+}
 
 componentObserver.observe(document.body, {
     childList: true,
@@ -154,14 +182,7 @@ function whenVisible(elem, cb) {
         destroyVisibilityListener(listener);
     }
 
-    if(isVisible(elem)){
-        cb();
-        return unbind;
-    }
     let unbindInDom = whenInDom(elem, function () {
-         if(isVisible(elem)){
-           cb();
-         }
          listener = makeVisibilityListener(elem, cb);
     });
     return unbind;
