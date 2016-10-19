@@ -66,6 +66,7 @@ function destroyVisibilityListener(listener) {
     if(!listener){
         return;
     }
+    console.log('deleting visibility listener ' + listener.id);
     delete visibilityListeners[listener.id];
     listener.elem['__VisibilityListenerId'] = null;
 }
@@ -100,16 +101,22 @@ const componentObserver = new MutationObserver(function whenListenerMutationHand
     if(gotNonTextAddition){
         Object.keys(listenerMap).forEach(function checkVisibiltyForWhenListenerId(id) {
             let listener = listenerMap[id];
-            if(isInDom(listener.elem)){
+            // have to check if listener is defined because one listener's callback
+            // can actually unbind other listeners resulting in a null map ref
+            if(listener && isInDom(listener.elem)){
                 listener.callCallbacks();
                 destroyInDomListener(listener);
             }
         });
     }
     // for any mutation we should check waiting visibility listeners
-    Object.keys(visibilityListeners).forEach(function checkVisibiltyForWhenListenerId(id) {
+    var keys = Object.keys(visibilityListeners);
+    keys.forEach(function checkVisibiltyForWhenListenerId(id) {
+        keys[1] = keys[1];
         let listener = visibilityListeners[id];
-        if(isVisible(listener.elem)){
+        // have to check if listener is defined because one listener's callback
+        // can actually unbind other listeners resulting in a null map ref
+        if(listener && isVisible(listener.elem)){
             listener.callCallbacks();
             destroyVisibilityListener(listener);
         }
@@ -156,7 +163,6 @@ function whenVisible(elem, cb) {
            cb();
          }
          listener = makeVisibilityListener(elem, cb);
-         visibilityListeners[listener.id] = listener;
     });
     return unbind;
 }
