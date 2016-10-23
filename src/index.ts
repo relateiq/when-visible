@@ -1,30 +1,30 @@
 ///<reference path="../typings/index.d.ts" />
 let listenerIdCount = 0;
-let listenerMap : { [key: number]: InDomListener } = {};
-let visibilityListeners : {[key: number]: WhenListener} = {};
+let listenerMap: { [key: number]: InDomListener } = {};
+let visibilityListeners: { [key: number]: WhenListener } = {};
 let animationFrameId;
 let gotAnyNonTextMutation;
-class WhenListener{
+class WhenListener {
     id: number;
-    elem : Node;
-    callbacks : Function[] = [];
-    everChecked : boolean = false;
-    constructor(elem, cb){
+    elem: Node;
+    callbacks: Function[] = [];
+    everChecked: boolean = false;
+    constructor(elem, cb) {
         this.id = ++listenerIdCount;
         this.elem = elem;
         this.callbacks.push(cb);
     }
 
-    public callCallbacks(){
-        this.callbacks.forEach(function (cb) {
+    public callCallbacks() {
+        this.callbacks.forEach(function(cb) {
             cb();
         });
     }
 }
 
-class InDomListener extends WhenListener{
+class InDomListener extends WhenListener {
 
-    constructor(elem, cb){
+    constructor(elem, cb) {
         super(elem, cb);
         let self = this;
         elem['__ElemInDomListenerId'] = this.id;
@@ -34,7 +34,7 @@ class InDomListener extends WhenListener{
 
 function makeInDomListener(elem, cb) {
     var previousListenerId = elem['__ElemInDomListenerId'];
-    if(previousListenerId){
+    if (previousListenerId) {
         var listener = listenerMap[previousListenerId];
         listener.callbacks.push(cb);
         return listener;
@@ -44,9 +44,9 @@ function makeInDomListener(elem, cb) {
     return listener;
 }
 
-function makeVisibilityListener(elem, cb){
+function makeVisibilityListener(elem, cb) {
     var previousListenerId = elem['__VisibilityListenerId'];
-    if(previousListenerId){
+    if (previousListenerId) {
         var listener = visibilityListeners[previousListenerId];
         listener.callbacks.push(cb);
         return listener;
@@ -58,7 +58,7 @@ function makeVisibilityListener(elem, cb){
 }
 
 function destroyInDomListener(listener) {
-    if(!listener){
+    if (!listener) {
         return;
     }
     delete listenerMap[listener.id];
@@ -66,7 +66,7 @@ function destroyInDomListener(listener) {
 }
 
 function destroyVisibilityListener(listener) {
-    if(!listener){
+    if (!listener) {
         return;
     }
     delete visibilityListeners[listener.id];
@@ -77,7 +77,7 @@ function destroyVisibilityListener(listener) {
 
 function getHighestParent(elem) {
     let parent = elem.parentNode;
-    while(parent){
+    while (parent) {
         elem = parent;
         parent = elem.parentNode
     }
@@ -94,34 +94,34 @@ function isVisible(element) {
 
 const componentObserver = new MutationObserver(function whenListenerMutationHandler(mutations: MutationRecord[]) {
     let gotNonTextAddition = false;
-    let gotAnyNonText  = false;
-     mutations.some(function inDomListenerHandlePossibleAdd(mutation) {
-           if(mutation.addedNodes.length && !gotNonTextAddition) {
-                gotNonTextAddition = Array.prototype.slice.call(mutation.addedNodes)
-                    .some(function inDomListenerHandleAddedNode(addedNode) {
-                        return addedNode.nodeType !== 3;
-                    });
-                gotAnyNonText = gotAnyNonText || gotNonTextAddition;
-           }
-           if(mutation.removedNodes.length && !gotAnyNonText){
-               gotAnyNonText = Array.prototype.slice.call(mutation.removedNodes)
-                    .some(function inDomListenerHandleAddedNode(removedNode) {
-                        return removedNode.nodeType !== 3;
-                    });
-           }
-           if(mutation.type === 'attributes'){
-               gotAnyNonText = true;
-           }
-           if(gotAnyNonText && gotNonTextAddition){
-               return true;
-           }
+    let gotAnyNonText = false;
+    mutations.some(function inDomListenerHandlePossibleAdd(mutation) {
+        if (mutation.addedNodes.length && !gotNonTextAddition) {
+            gotNonTextAddition = Array.prototype.slice.call(mutation.addedNodes)
+                .some(function inDomListenerHandleAddedNode(addedNode) {
+                    return addedNode.nodeType !== 3;
+                });
+            gotAnyNonText = gotAnyNonText || gotNonTextAddition;
+        }
+        if (mutation.removedNodes.length && !gotAnyNonText) {
+            gotAnyNonText = Array.prototype.slice.call(mutation.removedNodes)
+                .some(function inDomListenerHandleAddedNode(removedNode) {
+                    return removedNode.nodeType !== 3;
+                });
+        }
+        if (mutation.type === 'attributes') {
+            gotAnyNonText = true;
+        }
+        if (gotAnyNonText && gotNonTextAddition) {
+            return true;
+        }
     });
-    if(gotNonTextAddition){
+    if (gotNonTextAddition) {
         Object.keys(listenerMap).forEach(function checkForWhenInDomListenerId(id) {
             let listener = listenerMap[id];
             // have to check if listener is defined because one listener's callback
             // can actually unbind other listeners resulting in a null map ref
-            if(listener && isInDom(listener.elem)){
+            if (listener && isInDom(listener.elem)) {
                 listener.callCallbacks();
                 destroyInDomListener(listener);
             }
@@ -134,17 +134,20 @@ setInterval(checkVisibility, 32);
 
 function checkVisibility() {
     animationFrameId = null;
-           // for any mutation we should check waiting visibility listeners
-     var keys = Object.keys(visibilityListeners);
-        keys.forEach(function checkVisibiltyForWhenListenerId(id) {
+    // for any mutation we should check waiting visibility listeners
+    var keys = Object.keys(visibilityListeners);
+    keys.forEach(function checkVisibiltyForWhenListenerId(id) {
         let listener = visibilityListeners[id];
-        if(gotAnyNonTextMutation || !listener.everChecked){
+        if (gotAnyNonTextMutation || (listener && !listener.everChecked)) {
             // have to check if listener is defined because one listener's callback
             // can actually unbind other listeners resulting in a null map ref
-            listener.everChecked = true;
-            if(listener && isVisible(listener.elem)){
-                listener.callCallbacks();
-                destroyVisibilityListener(listener);
+
+            if (listener) {
+                listener.everChecked = true;
+                if (isVisible(listener.elem)) {
+                    listener.callCallbacks();
+                    destroyVisibilityListener(listener);
+                }
             }
         }
     });
@@ -159,13 +162,13 @@ componentObserver.observe(document.body, {
 
 function whenInDom(elem, cb) {
     let listener;
-    function unbind(){
-        if(listener){
+    function unbind() {
+        if (listener) {
             destroyInDomListener(listener);
         }
     }
 
-    if(isInDom(elem)){
+    if (isInDom(elem)) {
         cb();
         return unbind;
     }
@@ -175,17 +178,17 @@ function whenInDom(elem, cb) {
 
 function whenVisible(elem, cb) {
     let listener;
-    function unbind(){
-        if(unbindInDom){
-           unbindInDom();
+    function unbind() {
+        if (unbindInDom) {
+            unbindInDom();
         }
         destroyVisibilityListener(listener);
     }
 
-    let unbindInDom = whenInDom(elem, function () {
-         listener = makeVisibilityListener(elem, cb);
+    let unbindInDom = whenInDom(elem, function() {
+        listener = makeVisibilityListener(elem, cb);
     });
     return unbind;
 }
 
-module.exports = {visible : whenVisible, inDom : whenInDom}
+module.exports = { visible: whenVisible, inDom: whenInDom }
